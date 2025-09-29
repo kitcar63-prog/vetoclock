@@ -1,9 +1,17 @@
-# Ignorar entornos virtuales
+# --- Python ---
 myenv/
 venv/
 env/
-
-# Ignorar archivos compilados de Python
 *.pyc
 __pycache__/
 
+# --- macOS ---
+.DS_Store
+
+# --- Dashboard: salidas JSON (no versionar) ---
+public/data/*.json
+public/data/**/*.json
+
+# --- Scripts PHP: secretos y logs ---
+scripts/php/.env
+scripts/php/*.log
