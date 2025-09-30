@@ -105,18 +105,18 @@ $sql = "
 SELECT
   cl.id_cliente,
   cl.empresa,
-  DATE(ca.created_at) AS caso_creado,        -- día del caso
+  DATE(ca.opened_at) AS caso_creado,        -- día del caso
   COUNT(*) AS casos_del_dia,                 -- nº de casos con informe ese día
   ROUND(
     AVG(
       CASE
-        WHEN WEEKDAY(ca.created_at) IN (3, 4)  -- Jue/Vie
-             AND TIMESTAMPDIFF(SECOND, ca.created_at, ui.created_at) > 48*3600
-          THEN (TIMESTAMPDIFF(SECOND, ca.created_at, ui.created_at) - 48*3600) / 3600
-        WHEN WEEKDAY(ca.created_at) = 2        -- Mié
-             AND TIMESTAMPDIFF(SECOND, ca.created_at, ui.created_at) > 72*3600
-          THEN (TIMESTAMPDIFF(SECOND, ca.created_at, ui.created_at) - 48*3600) / 3600
-        ELSE TIMESTAMPDIFF(SECOND, ca.created_at, ui.created_at) / 3600
+        WHEN WEEKDAY(ca.opened_at) IN (3, 4)  -- Jue/Vie
+             AND TIMESTAMPDIFF(SECOND, ca.opened_at, ui.created_at) > 48*3600
+          THEN (TIMESTAMPDIFF(SECOND, ca.opened_at, ui.created_at) - 48*3600) / 3600
+        WHEN WEEKDAY(ca.opened_at) = 2        -- Mié
+             AND TIMESTAMPDIFF(SECOND, ca.opened_at, ui.created_at) > 72*3600
+          THEN (TIMESTAMPDIFF(SECOND, ca.opened_at, ui.created_at) - 48*3600) / 3600
+        ELSE TIMESTAMPDIFF(SECOND, ca.opened_at, ui.created_at) / 3600
       END
     )
   , 2) AS media_horas_ajustada_dia
@@ -127,11 +127,11 @@ JOIN (
   FROM informes
   GROUP BY caso_id
 ) ui ON ui.caso_id = ca.id_caso
-WHERE ca.created_at >= ?
-  AND ca.created_at <  ?
+WHERE ca.opened_at >= ?
+  AND ca.opened_at <  ?
   AND ca.urgencia_abierto IS NULL
-  AND ui.created_at >= ca.created_at
-GROUP BY cl.id_cliente, cl.empresa, DATE(ca.created_at)
+  AND ui.created_at >= ca.opened_at
+GROUP BY cl.id_cliente, cl.empresa, DATE(ca.opened_at)
 ORDER BY cl.empresa, caso_creado
 ";
 
