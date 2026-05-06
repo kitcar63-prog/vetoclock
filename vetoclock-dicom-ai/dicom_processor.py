@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pydicom
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import config
 
@@ -95,6 +95,21 @@ def _caracterizar_tejido(stats: dict) -> str:
         return f"DENSIDAD AIRE ({mean_hu:.0f} HU)"
 
 
+def _add_orientation_markers(img: Image.Image) -> Image.Image:
+    draw = ImageDraw.Draw(img)
+    w, h = img.size
+    font_size = max(14, w // 25)
+    try:
+        font = ImageFont.load_default(size=font_size)
+    except TypeError:
+        font = ImageFont.load_default()
+    y_pos = h // 2 - font_size // 2
+    # Convención radiológica: R del paciente = izquierda imagen, L del paciente = derecha imagen
+    draw.text((4, y_pos), "R", fill=(255, 255, 0), font=font)
+    draw.text((w - font_size - 2, y_pos), "L", fill=(255, 255, 0), font=font)
+    return img
+
+
 def _dicom_to_pil(arr_hu: np.ndarray, window: str = "pulmon") -> Image.Image:
     if window == "mediastino":
         arr = _apply_windowing(arr_hu, WINDOW_CENTER_MEDIASTINO, WINDOW_WIDTH_MEDIASTINO)
@@ -103,7 +118,22 @@ def _dicom_to_pil(arr_hu: np.ndarray, window: str = "pulmon") -> Image.Image:
     else:
         arr = _apply_windowing(arr_hu, WINDOW_CENTER_PULMON, WINDOW_WIDTH_PULMON)
 
-    return Image.fromarray(arr).convert("RGB")
+    img = Image.fromarray(arr).convert("RGB")
+    return _add_orientation_markers(img)
+
+
+def _normalizar_caracterizaciones(stats_lista: list) -> list:
+    if not stats_lista:
+        return stats_lista
+    n_grasa = sum(1 for s in stats_lista if "ZONA GRASA DETECTADA" in s.get("caracterizacion", ""))
+    if n_grasa / len(stats_lista) > 0.5:
+        for s in stats_lista:
+            if "ZONA GRASA DETECTADA" in s.get("caracterizacion", ""):
+                s["caracterizacion"] = (
+                    f"Grasa subcutánea fisiológica (p10={s['p10']:.0f} HU, media={s['mean']:.0f} HU) "
+                    f"— patrón global del panículo adiposo torácico, no lesión focal"
+                )
+    return stats_lista
 
 
 def _pesos_por_motivo(presentacion: str, antecedentes: str = "") -> list[float]:
@@ -264,6 +294,7 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
                 print(f"[DICOM]   ✗ Error en corte {i + 1}: {e}")
                 continue
 
+        hu_stats_lista = _normalizar_caracterizaciones(hu_stats_lista)
         print(f"[DICOM] Procesamiento completado: {len(imagenes_pulmon)} cortes OK")
 
     series_info = [

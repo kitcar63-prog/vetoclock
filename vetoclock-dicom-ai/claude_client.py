@@ -55,6 +55,14 @@ INTERPRETACIÓN DE PERCENTILES:
   - Cuando p10 o p25 están en rango graso pero la media no, significa que la lesión grasa coexiste
     con tejido normal circundante — esto es el patrón típico de un LIPOMA encapsulado.
 
+ORIENTACIÓN ANATÓMICA — MUY IMPORTANTE:
+Las imágenes DICOM siguen la CONVENCIÓN RADIOLÓGICA estándar:
+  - Lo que aparece a la DERECHA de la imagen = lado IZQUIERDO del paciente (marcado con "L")
+  - Lo que aparece a la IZQUIERDA de la imagen = lado DERECHO del paciente (marcado con "R")
+  Las imágenes tienen marcadores "R" y "L" en los bordes laterales para confirmarlo.
+  Cuando describas lateralidad (masa izquierda/derecha, derrame izquierdo/derecho, etc.) usa SIEMPRE
+  la lateralidad del PACIENTE, no la del observador.
+
 IMPORTANTE: Se adjuntan cortes en TRES ventanas diferentes:
   - Primeros {n_cortes} cortes: ventana PULMÓN (W=1500, L=-600)
   - Siguientes {n_cortes} cortes: ventana TEJIDO BLANDO (W=400, L=40)
