@@ -15,3 +15,15 @@ public/data/**/*.json
 # --- Scripts PHP: secretos y logs ---
 scripts/php/.env
 scripts/php/*.log
+
+# --- Credenciales: todos los .env del repo ---
+.env
+**/.env
+*.env
+
+# --- Cache DICOM local (puede ser muy grande) ---
+vetoclock-dicom-ai/.dicom_cache/
+**/.dicom_cache/
+
+# --- Node ---
+node_modules/
