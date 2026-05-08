@@ -119,6 +119,7 @@ def _dicom_to_pil(arr_hu: np.ndarray, window: str = "pulmon") -> Image.Image:
         arr = _apply_windowing(arr_hu, WINDOW_CENTER_PULMON, WINDOW_WIDTH_PULMON)
 
     img = Image.fromarray(arr).convert("RGB")
+    img = img.resize((256, 256), Image.LANCZOS)
     return _add_orientation_markers(img)
 
 
@@ -210,18 +211,18 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
 
     CACHE_DIR.mkdir(exist_ok=True)
 
-    if cache_file.exists():
-        print(f"[CACHE] Usando ZIP local: {cache_file}")
-        zip_data = cache_file.read_bytes()
-    else:
+    if not cache_file.exists():
         s3 = _s3_client()
         print(f"[S3] Descargando — Bucket: {config.S3_BUCKET} | Key: {key}")
-        obj      = s3.get_object(Bucket=config.S3_BUCKET, Key=key)
-        zip_data = obj["Body"].read()
-        cache_file.write_bytes(zip_data)
+        obj = s3.get_object(Bucket=config.S3_BUCKET, Key=key)
+        with open(cache_file, "wb") as f:
+            for chunk in obj["Body"].iter_chunks(chunk_size=8 * 1024 * 1024):
+                f.write(chunk)
         print(f"[CACHE] ZIP guardado en: {cache_file}")
+    else:
+        print(f"[CACHE] Usando ZIP local: {cache_file}")
 
-    with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+    with zipfile.ZipFile(cache_file) as zf:
         archivos_dcm = [
             f for f in zf.namelist()
             if not f.startswith("__MACOSX")
