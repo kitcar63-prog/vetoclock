@@ -4,9 +4,11 @@ import anthropic
 from PIL import Image
 import config
 
-client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-
 MODEL = "claude-opus-4-7"
+
+
+def _get_client():
+    return anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
 
 def _imagen_a_base64(img: Image.Image) -> str:
@@ -161,7 +163,7 @@ def generar_informe(caso: dict, resultado_dicom: dict, casos_similares: list) ->
         "text": "Por favor, genera el informe diagnóstico basándote en los cortes del TC y el contexto clínico."
     })
 
-    response = client.messages.create(
+    response = _get_client().messages.create(
         model=MODEL,
         max_tokens=4096,
         messages=[{"role": "user", "content": content}],
