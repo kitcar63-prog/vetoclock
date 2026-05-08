@@ -1,7 +1,14 @@
 import streamlit as st
-import db
-import dicom_processor
-import claude_client
+
+try:
+    import db
+    import dicom_processor
+    import claude_client
+except Exception as _import_error:
+    import traceback
+    st.error(f"Error de importación: {_import_error}")
+    st.code(traceback.format_exc())
+    st.stop()
 
 st.set_page_config(
     page_title="VetoClock DICOM AI",
