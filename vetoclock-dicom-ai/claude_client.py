@@ -146,7 +146,8 @@ def generar_informe(caso: dict, resultado_dicom: dict, casos_similares: list) ->
 
     content = [{"type": "text", "text": prompt}]
 
-    for ventana, etiqueta in [("pulmon", "VENTANA PULMÓN"), ("tejido_blando", "VENTANA TEJIDO BLANDO"), ("grasa", "VENTANA GRASA")]:
+    # Enviamos solo ventana pulmón + tejido blando para reducir memoria
+    for ventana, etiqueta in [("pulmon", "VENTANA PULMÓN"), ("tejido_blando", "VENTANA TEJIDO BLANDO")]:
         content.append({"type": "text", "text": f"\n--- {etiqueta} ---"})
         for img in resultado_dicom.get(ventana, []):
             content.append({

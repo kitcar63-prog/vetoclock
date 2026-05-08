@@ -234,45 +234,77 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
         if not archivos_dcm:
             raise ValueError(f"No se encontraron archivos DICOM en {enlace_dicom}")
 
-        datasets = []
-        for i, nombre in enumerate(archivos_dcm):
+        # Paso 1: leer solo metadatos para obtener posición Z y separar series
+        meta_list = []
+        for nombre in archivos_dcm:
             try:
                 with zf.open(nombre) as f:
-                    ds = pydicom.dcmread(io.BytesIO(f.read()), force=True)
-                    if hasattr(ds, "pixel_array"):
-                        datasets.append(ds)
-                        if (i + 1) % 50 == 0:
-                            print(f"[DICOM] Leídos {i + 1}/{len(archivos_dcm)} archivos...")
+                    ds = pydicom.dcmread(io.BytesIO(f.read()), force=True, stop_before_pixels=True)
+                    meta_list.append((nombre, ds))
             except Exception:
                 continue
 
-        print(f"[DICOM] {len(datasets)} slices válidos cargados")
+        print(f"[DICOM] {len(meta_list)} slices con metadatos leídos")
 
-        if not datasets:
+        if not meta_list:
             raise ValueError("No se pudieron leer los archivos DICOM")
 
-        # Separar series por SeriesInstanceUID
-        series = {}
-        for ds in datasets:
+        # Separar series por SeriesInstanceUID usando solo metadatos
+        series_meta = {}
+        for nombre, ds in meta_list:
             uid = getattr(ds, "SeriesInstanceUID", "sin_uid")
-            series.setdefault(uid, []).append(ds)
+            series_meta.setdefault(uid, []).append((nombre, ds))
 
-        print(f"[DICOM] {len(series)} series detectadas:")
-        for uid, slices in series.items():
-            desc = getattr(slices[0], "SeriesDescription", "sin descripción")
+        print(f"[DICOM] {len(series_meta)} series detectadas:")
+        for uid, slices in series_meta.items():
+            desc = getattr(slices[0][1], "SeriesDescription", "sin descripción")
             print(f"[DICOM]   UID={uid} | {len(slices)} slices | desc='{desc}'")
 
-        # Usar la serie con más slices (la serie principal de adquisición)
-        serie_principal = max(series.values(), key=len)
-        uid_principal   = [u for u, s in series.items() if s is serie_principal][0]
-        desc_principal  = getattr(serie_principal[0], "SeriesDescription", "sin descripción")
-        print(f"[DICOM] Serie seleccionada: {len(serie_principal)} slices | '{desc_principal}'")
+        # Usar la serie con más slices
+        serie_principal_meta = max(series_meta.values(), key=len)
+        desc_principal = getattr(serie_principal_meta[0][1], "SeriesDescription", "sin descripción")
+        print(f"[DICOM] Serie seleccionada: {len(serie_principal_meta)} slices | '{desc_principal}'")
 
         pesos       = _pesos_por_motivo(presentacion, antecedentes)
         counts_zona = _calcular_counts(n_cortes, pesos)
         print(f"[DICOM] Muestreo adaptado — pesos craneal/medio/caudal: {pesos} → {counts_zona} cortes")
-        seleccionados = _seleccionar_cortes(serie_principal, n_cortes, pesos)
-        print(f"[DICOM] {len(seleccionados)} cortes seleccionados para procesar")
+
+        # Seleccionar cortes usando metadatos (posición Z)
+        def z_pos_meta(item):
+            try:
+                return float(item[1].ImagePositionPatient[2])
+            except Exception:
+                return 0.0
+
+        serie_ordenada = sorted(serie_principal_meta, key=z_pos_meta)
+        total = len(serie_ordenada)
+        zones = [
+            (int(total * 0.10), int(total * 0.35)),
+            (int(total * 0.35), int(total * 0.65)),
+            (int(total * 0.65), int(total * 0.90)),
+        ]
+        counts = _calcular_counts(n_cortes, pesos)
+        nombres_seleccionados = []
+        for (start, end), count in zip(zones, counts):
+            end = max(end, start + 1)
+            indices = np.linspace(start, end - 1, count, dtype=int)
+            nombres_seleccionados.extend([serie_ordenada[idx][0] for idx in indices])
+
+        # Paso 2: cargar pixels solo de los cortes seleccionados
+        print(f"[DICOM] Cargando pixels de {len(nombres_seleccionados)} cortes seleccionados...")
+        seleccionados = []
+        for nombre in nombres_seleccionados:
+            try:
+                with zf.open(nombre) as f:
+                    ds = pydicom.dcmread(io.BytesIO(f.read()), force=True)
+                    if hasattr(ds, "pixel_array"):
+                        seleccionados.append(ds)
+            except Exception:
+                continue
+        print(f"[DICOM] {len(seleccionados)} cortes con pixels cargados")
+
+        # Construir series_info desde metadatos
+        series = {uid: [ds for _, ds in slices] for uid, slices in series_meta.items()}
 
         hu_stats_lista = []
         imagenes_pulmon      = []
