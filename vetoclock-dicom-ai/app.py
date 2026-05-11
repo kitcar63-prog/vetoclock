@@ -124,8 +124,8 @@ if st.button("Analizar caso", type="primary"):
             st.error(f"Error generando informe: {e}")
             st.stop()
 
-    st.subheader("📋 Informe generado por IA")
-    st.info("Este informe es un borrador de apoyo. Debe ser revisado y validado por el especialista.")
+    st.subheader("📋 Hoja de trabajo preliminar")
+    st.warning("Borrador para revisión del especialista sobre el estudio completo. Las observaciones con [VALORACIÓN LIMITADA] requieren verificación activa. No reemplaza el criterio clínico.")
     st.markdown(informe)
 
     if st.button("Ver informe real del especialista"):

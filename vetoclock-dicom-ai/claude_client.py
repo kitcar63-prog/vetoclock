@@ -20,8 +20,21 @@ def _imagen_a_base64(img) -> str:
 
 
 def _construir_prompt(caso: dict, casos_similares: list, hu_stats: list, n_cortes: int = 20, counts_zona: list = None) -> str:
-    contexto = f"""Eres un especialista en diagnóstico por imagen veterinaria.
-Vas a analizar un TC de región torácica de un {caso['especie']} ({caso.get('raza', '')}, {caso.get('edad', '')} años, {caso.get('peso', '')} kg).
+    contexto = f"""Eres un asistente de imagen veterinaria. Tu función es producir una HOJA DE TRABAJO PRELIMINAR —
+no un informe diagnóstico— para que un especialista la revise y valide sobre el estudio completo.
+
+REGLAS DE LENGUAJE — OBLIGATORIAS:
+1. DESCRIBE lo que observas. Nunca afirmes la AUSENCIA de algo que no puedas ver con certeza.
+   ✗ PROHIBIDO: "no se identifica megaesófago", "se descarta neumotórax", "esófago normal"
+   ✓ CORRECTO: "esófago: calibre aparente conservado en los cortes disponibles [VALORACIÓN LIMITADA — verificar en estudio completo]"
+2. Marca cada observación con su nivel de visibilidad:
+   [BIEN VISUALIZADO] — hallazgo claro en múltiples cortes con ventana adecuada
+   [VALORACIÓN LIMITADA] — visible parcialmente, muestreo escaso, ventana subóptima o sin contraste
+   [NO EVALUABLE] — fuera del campo de muestreo disponible
+3. Nunca uses "descartado", "ausente" o "sin hallazgos" sin añadir "en los cortes disponibles".
+4. Para cualquier estructura que requiera contraste para caracterización definitiva, indica siempre "estudio sin contraste — valoración limitada".
+
+Paciente: {caso['especie']} ({caso.get('raza', '')}, {caso.get('edad', '')} años, {caso.get('peso', '')} kg).
 
 MOTIVO DE CONSULTA Y PRESENTACIÓN CLÍNICA:
 {caso.get('presentacion', 'No disponible')}
@@ -90,78 +103,77 @@ Informe del especialista: {c.get('area_uno', '')}
 
     contexto += """
 
-GUÍA DE ANÁLISIS — presta atención especial a estos puntos:
+REFERENCIA RÁPIDA PARA EL ANÁLISIS:
 
-MASAS HIPODENSAS (lipoma vs liposarcoma):
-  - Si p10 está consistentemente entre -140 y -200 HU en varios cortes, clasificar como LIPOMA SIMPLE probable.
-  - Solo elevar a "lipoma infiltrativo" o "liposarcoma" si hay invasión franca de planos musculares o márgenes francamente irregulares visibles en imagen.
-  - Sin imágenes post-contraste disponibles, NO asumir infiltración por presencia de septos finos — los lipomas simples pueden tener septos fibróticos internos.
+MASAS HIPODENSAS: Si p10 entre -140 y -200 HU en varios cortes → LIPOMA SIMPLE probable [VALORACIÓN LIMITADA sin contraste].
+  Solo indica "infiltrativo" si hay invasión franca visible de planos musculares. Septos finos no implican infiltración.
 
-LINFONODOS — diferencia obligatoria:
-  - Linfonodos AXILARES: en la fosa axilar, lateral al tórax, ipsilaterales a la masa.
-  - Linfonodos MEDIASTÍNICOS CRANEALES: paratraqueales/prevasculares, en el mediastino craneal.
-  - Linfonodos MEDIASTÍNICOS CAUDALES: en la bifurcación traqueal (carina).
-  - Evalúa y nombra cada grupo por separado. No los confundas.
+LINFONODOS — nombra cada grupo por separado:
+  Axilares (fosa axilar, lateral al tórax) / Mediastínicos craneales (paratraqueales) / Mediastínicos caudales (carina).
 
-HALLAZGOS RESPIRATORIOS — busca activamente:
-  - TORSIÓN LOBAR (EMERGENCIA QUIRÚRGICA): un lóbulo torsionado muestra patrón vesicular/enfisema con gas
-    atrapado (negro uniforme en ventana pulmón) e interrupción ABRUPTA de la luz del bronquio lobar en el punto
-    de torsión. El lóbulo puede estar hiperinsuflado o consolidado según estadio. Diferencia de atelectasia simple:
-    la torsión tiene bronquio que "se corta" bruscamente, la atelectasia tiene bronquio visible hasta el colapso.
-    Lóbulo más frecuente en gatos: lóbulo medio derecho.
-  - NEUMOTÓRAX: gas libre (HU ~ -1000) en espacio pleural dorsal (en decúbito esternal), sin trama vascular.
-    Describe lateralidad (izquierdo/derecho/bilateral) y volumen estimado (leve/moderado/grave).
-    Distingue neumotórax de enfisema subcutáneo.
-  - BRONQUIOMALACIA: colapso dinámico de bronquios lobulares (especialmente lóbulo craneal izquierdo).
-  - ATELECTASIA VENTRAL: colapso/consolidación ventral, frecuente bajo anestesia general. No confundir con lesión primaria.
-  - PATRÓN INTERSTICIAL difuso: puede ser artefacto de posición/anestesia.
+HALLAZGOS A BUSCAR ACTIVAMENTE:
+  - TORSIÓN LOBAR (urgencia quirúrgica): patrón vesicular + interrupción ABRUPTA del bronquio lobar. Lóbulo más frecuente en gatos: medio derecho.
+  - NEUMOTÓRAX: gas libre dorsal (HU ~ -1000) sin trama vascular. Distinguir de enfisema subcutáneo y de aire intrabronquial.
+  - MEGAESÓFAGO: esófago distendido con contenido aéreo/fluido, paredes finas. Causa frecuente de bronconeumonía recurrente. Buscar siempre.
+  - ATELECTASIA VENTRAL: artefacto frecuente bajo anestesia. No confundir con lesión primaria.
 
-TIROIDES Y ENTRADA TORÁCICA — evalúa en los primeros cortes (zona craneal):
-  - Tiroides: dos lóbulos normalmente simétricos, <1cm, en posición paratraqueal craneal. En GATOS es frecuente
-    el adenoma/adenocarcinoma tiroideo: lóbulo aumentado (>1cm), con marcado realce heterogéneo post-contraste,
-    puede ser ectópico intratorácico. Reporta tamaño aproximado y simetría aunque no sea el motivo de consulta.
-  - Linfonodos mediastínicos craneales: en entrada torácica, paratraqueales/prevasculares.
+LIMITACIONES INHERENTES A ESTE ESTUDIO (incluir en cada apartado correspondiente):
+  - Estudio SIN CONTRASTE: no es posible valorar realce, permeabilidad vascular ni caracterización tisular definitiva.
+  - Muestreo de {n_cortes} cortes de un volumen completo: hallazgos entre cortes pueden no estar representados.
+  - Solo plano axial: sin reconstrucciones coronales/sagitales para evaluación morfológica 3D.
 
-ESÓFAGO — evalúa sistemáticamente en cortes medios y caudales (ventana tejido blando):
-  - Calibre normal: esófago colapsado o con mínimo contenido aéreo, paredes finas.
-  - MEGAESÓFAGO: esófago distendido con contenido aéreo o fluido, paredes finas. Causa frecuente de bronconeumonía
-    recurrente por aspiración. Reporta siempre el estado del esófago aunque no sea el motivo de consulta.
-  - Masa esofágica / cuerpo extraño: contenido intraluminal de alta atenuación o masa parietal.
+---
 
-PARED TORÁCICA Y MEDIASTINO — evalúa en ventana TEJIDO BLANDO:
-  - Musculatura torácica (dorsal ancho, intercostales, pectorales, serrato): compara simetría bilateral, busca masas, colecciones o alteraciones focales.
-  - Tejido subcutáneo: masas encapsuladas o colecciones. Distingue grasa fisiológica distribuida (sin efecto masa) de una lesión organizada.
-  - Mediastino craneal y caudal: colecciones fluidas (0-20 HU = quiste/fluido), masas, estructuras con contorno propio. No omitas estructuras pequeñas con morfología definida.
-  - Espacio pleural: distingue trasudado (0-20 HU), exudado/hemotórax (20-40 HU), hemotórax puro (>40 HU).
-    Confirma ausencia de neumotórax (gas libre dorsal sin trama vascular).
-  - Espacio pericárdico: confirma ausencia de derrame aunque sea mínimo.
+Analiza los cortes adjuntos y genera la HOJA DE TRABAJO siguiendo EXACTAMENTE esta estructura:
 
-ESTRUCTURAS ÓSEAS — evalúa en ventana TEJIDO BLANDO:
-  - Costillas, esternebras y vértebras torácicas en el campo de estudio: lesiones osteolíticas, osteoproliferativas, irregularidades corticales o fracturas.
-  - En estadiajes oncológicos, la ausencia de lesiones óseas torácicas es un hallazgo a reportar explícitamente.
+## 1. OBSERVACIONES POR SISTEMA
 
-Analiza los cortes del TC torácico que se adjuntan y genera un informe diagnóstico detallado siguiendo esta estructura:
+Para cada estructura indica el nivel entre corchetes y describe lo que observas. Usa terminología médica veterinaria.
+Si no es claramente visible, escribe lo que se aprecia y marca [VALORACIÓN LIMITADA — verificar en estudio completo].
+NUNCA escribas "normal", "sin hallazgos" o "no se identifica X" sin el qualifier "en los cortes disponibles".
 
-1. DESCRIPCIÓN DE HALLAZGOS: Describe sistemáticamente lo que observas en cada uno de estos apartados:
-   - Parénquima pulmonar: nódulos, masas, patrón intersticial, consolidaciones, aireación por lóbulos.
-     Evalúa CADA lóbulo individualmente (craneal derecho, medio derecho, caudal derecho, craneal izquierdo, caudal izquierdo).
-     Busca activamente patrón vesicular o interrupción bronquial que sugiera torsión lobar.
-   - Árbol traqueobronquial: permeabilidad, calibre, continuidad de cada bronquio lobar hasta su lóbulo destino.
-     Una interrupción abrupta del bronquio es signo de torsión lobar o masa endobronquial.
-   - Vascularización pulmonar: calibre de arterias y venas pulmonares, defectos de repleción.
-   - Espacio pleural y neumotórax: gas libre (neumotórax), líquido y su carácter HU, lateralidad.
-   - Mediastino: linfonodos (craneales y caudales por separado), colecciones fluidas, quistes, masas.
-   - Tiroides y estructuras de la entrada torácica: simetría y tamaño de lóbulos tiroideos, masas paratraqueales.
-   - Esófago: calibre, contenido (aire/fluido/masa), paredes. Descartar megaesófago siempre.
-   - Estructuras cardiovasculares (corazón, grandes vasos, pericardio, vena cava).
-   - Pared torácica: musculatura y tejido subcutáneo (simetría, masas, colecciones focales).
-   - Caja torácica ósea: costillas, esternebras, vértebras torácicas visibles.
+**Parénquima pulmonar** — evalúa CADA lóbulo individualmente:
+  Lóbulo craneal derecho / Lóbulo medio derecho / Lóbulo caudal derecho / Lóbulo craneal izquierdo / Lóbulo caudal izquierdo
+  Busca: consolidaciones, bronquiectasias, vidrio deslustrado, nódulos, patrón vesicular, interrupción bronquial abrupta.
 
-2. INTERPRETACIÓN: Interpreta los hallazgos en el contexto clínico del paciente.
+**Árbol traqueobronquial**: tráquea y continuidad de cada bronquio lobar hasta su lóbulo destino.
 
-3. CONCLUSIONES: Resume los hallazgos principales y su probable significado clínico.
+**Vascularización pulmonar** [VALORACIÓN LIMITADA — sin contraste]: describe calibre visible. No concluyas normalidad vascular.
 
-Sé preciso, usa terminología médica veterinaria apropiada, y basa tu diagnóstico en lo que realmente observas en las imágenes."""
+**Espacio pleural**: gas libre (descripción, lateralidad), líquido (estimación HU si visible).
+  Nota: valores p10 muy negativos pueden corresponder a aire intrabronquial, no a neumotórax — correlacionar con imagen.
+
+**Mediastino**: linfonodos craneales y caudales por separado (tamaño, morfología visible). Colecciones, masas.
+
+**Tiroides y entrada torácica** [VALORACIÓN LIMITADA — zona craneal con muestreo escaso]:
+  Describe lo que se aprecia en los cortes craneales disponibles. No afirmes simetría si no es claramente visible.
+
+**Esófago** [VALORACIÓN LIMITADA — sin contraste, muestreo variable]:
+  Describe el calibre y contenido observado en cada zona (craneal/media/caudal al nivel de la carina).
+  NO afirmes "sin megaesófago" — describe lo que ves e indica "verificar calibre real en estudio completo".
+
+**Estructuras cardiovasculares** [VALORACIÓN LIMITADA — sin contraste]:
+  Tamaño y morfología cardíaca visible. Pericardio. No evalúes función.
+
+**Pared torácica y tejido subcutáneo**: simetría muscular, masas, colecciones. Distingue grasa fisiológica de lesión organizada.
+
+**Caja torácica ósea**: costillas, esternebras y vértebras torácicas visibles. Lesiones líticas u osteoproliferativas.
+
+## 2. PATRONES IDENTIFICADOS
+
+Lista los patrones radiológicos que observas con su distribución y extensión. No hagas diagnósticos etiológicos — describe patrones.
+Ejemplo correcto: "Consolidación multifocal de distribución craneoventral bilateral" o "Bronquiectasias cilíndricas bilaterales de predominio caudal"
+
+## 3. PUNTOS DE VERIFICACIÓN PARA EL ESPECIALISTA
+
+Lista ordenada de lo que el especialista debe verificar en el estudio completo, de mayor a menor relevancia clínica.
+Formato: ⚠️ [Estructura] — [Qué verificar específicamente] — [Por qué es relevante en este caso]
+
+Incluye SIEMPRE esófago, estructuras con [VALORACIÓN LIMITADA] y zonas con hallazgos detectados.
+
+## 4. PREGUNTAS CLÍNICAS
+
+2-4 preguntas abiertas que el especialista debe responder al revisar el estudio completo, basadas en los hallazgos preliminares y la clínica del paciente. Estas preguntas guían la revisión, no la concluyen."""
 
     return contexto
 
@@ -196,7 +208,7 @@ def generar_informe(caso: dict, resultado_dicom: dict, casos_similares: list) ->
 
     content.append({
         "type": "text",
-        "text": "Por favor, genera el informe diagnóstico basándote en los cortes del TC y el contexto clínico."
+        "text": "Por favor, genera la hoja de trabajo preliminar siguiendo exactamente la estructura indicada. Recuerda: describe lo que observas, marca el nivel de visibilidad de cada estructura, y nunca afirmes la ausencia de hallazgos sin el qualifier 'en los cortes disponibles'."
     })
 
     response = _get_client().messages.create(
