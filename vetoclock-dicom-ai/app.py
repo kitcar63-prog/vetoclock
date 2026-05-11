@@ -79,6 +79,15 @@ if st.button("Analizar caso", type="primary"):
             st.error(str(e))
             st.stop()
 
+        if n == 0:
+            status.update(label="❌ No se cargaron cortes DICOM", state="error")
+            st.error(
+                "No se pudieron cargar cortes del DICOM. "
+                "Revisa los logs para ver si el ZIP contiene archivos .dcm válidos con pixel_array. "
+                "No se generará informe sin imágenes."
+            )
+            st.stop()
+
         tab1, tab2, tab3 = st.tabs(["🫁 Pulmón", "🫀 Tejido blando", "🧈 Grasa"])
 
         for tab, ventana in [(tab1, "pulmon"), (tab2, "tejido_blando"), (tab3, "grasa")]:

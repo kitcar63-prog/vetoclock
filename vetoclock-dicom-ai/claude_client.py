@@ -120,6 +120,12 @@ TIROIDES Y ENTRADA TORÁCICA — evalúa en los primeros cortes (zona craneal):
     puede ser ectópico intratorácico. Reporta tamaño aproximado y simetría aunque no sea el motivo de consulta.
   - Linfonodos mediastínicos craneales: en entrada torácica, paratraqueales/prevasculares.
 
+ESÓFAGO — evalúa sistemáticamente en cortes medios y caudales (ventana tejido blando):
+  - Calibre normal: esófago colapsado o con mínimo contenido aéreo, paredes finas.
+  - MEGAESÓFAGO: esófago distendido con contenido aéreo o fluido, paredes finas. Causa frecuente de bronconeumonía
+    recurrente por aspiración. Reporta siempre el estado del esófago aunque no sea el motivo de consulta.
+  - Masa esofágica / cuerpo extraño: contenido intraluminal de alta atenuación o masa parietal.
+
 PARED TORÁCICA Y MEDIASTINO — evalúa en ventana TEJIDO BLANDO:
   - Musculatura torácica (dorsal ancho, intercostales, pectorales, serrato): compara simetría bilateral, busca masas, colecciones o alteraciones focales.
   - Tejido subcutáneo: masas encapsuladas o colecciones. Distingue grasa fisiológica distribuida (sin efecto masa) de una lesión organizada.
@@ -144,6 +150,7 @@ Analiza los cortes del TC torácico que se adjuntan y genera un informe diagnós
    - Espacio pleural y neumotórax: gas libre (neumotórax), líquido y su carácter HU, lateralidad.
    - Mediastino: linfonodos (craneales y caudales por separado), colecciones fluidas, quistes, masas.
    - Tiroides y estructuras de la entrada torácica: simetría y tamaño de lóbulos tiroideos, masas paratraqueales.
+   - Esófago: calibre, contenido (aire/fluido/masa), paredes. Descartar megaesófago siempre.
    - Estructuras cardiovasculares (corazón, grandes vasos, pericardio, vena cava).
    - Pared torácica: musculatura y tejido subcutáneo (simetría, masas, colecciones focales).
    - Caja torácica ósea: costillas, esternebras, vértebras torácicas visibles.
@@ -158,6 +165,13 @@ Sé preciso, usa terminología médica veterinaria apropiada, y basa tu diagnós
 
 
 def generar_informe(caso: dict, resultado_dicom: dict, casos_similares: list) -> str:
+    imagenes_pulmon = resultado_dicom.get("pulmon", [])
+    if not imagenes_pulmon:
+        raise ValueError(
+            "No hay imágenes DICOM disponibles. No se puede generar un informe sin cortes. "
+            "Revisa que el DICOM se procesó correctamente."
+        )
+
     hu_stats    = resultado_dicom.get("hu_stats", [])
     n_cortes    = resultado_dicom.get("n_cortes", 20)
     counts_zona = resultado_dicom.get("counts_zona", [7, 7, 6])
