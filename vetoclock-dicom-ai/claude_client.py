@@ -65,13 +65,11 @@ Las imágenes DICOM siguen la CONVENCIÓN RADIOLÓGICA estándar:
   Cuando describas lateralidad (masa izquierda/derecha, derrame izquierdo/derecho, etc.) usa SIEMPRE
   la lateralidad del PACIENTE, no la del observador.
 
-IMPORTANTE: Se adjuntan cortes en TRES ventanas diferentes:
-  - Primeros {n_cortes} cortes: ventana PULMÓN (W=1500, L=-600)
-  - Siguientes {n_cortes} cortes: ventana TEJIDO BLANDO (W=400, L=40)
-  - Últimos {n_cortes} cortes: ventana GRASA (W=400, L=-100) — clave para detectar lipomas
-    En ventana grasa, un lipoma aparece brillante/blanco bien delimitado sobre fondo gris oscuro.
+IMPORTANTE: Se adjuntan cortes en DOS ventanas:
+  - Primeros {n_cortes} cortes: ventana PULMÓN (W=1500, L=-600) — parénquima, bronquios, neumotórax
+  - Siguientes {n_cortes} cortes: ventana TEJIDO BLANDO (W=400, L=40) — masas, mediastino, vasos, pleura
 
-DISTRIBUCIÓN DE LOS {n_cortes} CORTES (igual en las 3 ventanas):
+DISTRIBUCIÓN DE LOS {n_cortes} CORTES (igual en las 2 ventanas):
   - Cortes 1-{counts_zona[0]}: ZONA CRANEAL del tórax ({counts_zona[0]} cortes — entrada torácica, lóbulos craneales, linfonodos mediastínicos craneales)
   - Cortes {counts_zona[0]+1}-{counts_zona[0]+counts_zona[1]}: ZONA MEDIA del tórax ({counts_zona[1]} cortes — hilio pulmonar, corazón, carina, lóbulos medios)
   - Cortes {counts_zona[0]+counts_zona[1]+1}-{n_cortes}: ZONA CAUDAL del tórax ({counts_zona[2]} cortes — lóbulos caudales, diafragma)
@@ -104,15 +102,31 @@ LINFONODOS — diferencia obligatoria:
   - Evalúa y nombra cada grupo por separado. No los confundas.
 
 HALLAZGOS RESPIRATORIOS — busca activamente:
-  - BRONQUIOMALACIA: colapso dinámico de bronquios lobulares (especialmente lóbulo craneal izquierdo). Se ve como estrechamiento o colapso del lumen bronquial.
-  - ATELECTASIA VENTRAL: colapso/consolidación en regiones ventrales, frecuente en pacientes bajo anestesia general. No confundir con lesión primaria.
+  - TORSIÓN LOBAR (EMERGENCIA QUIRÚRGICA): un lóbulo torsionado muestra patrón vesicular/enfisema con gas
+    atrapado (negro uniforme en ventana pulmón) e interrupción ABRUPTA de la luz del bronquio lobar en el punto
+    de torsión. El lóbulo puede estar hiperinsuflado o consolidado según estadio. Diferencia de atelectasia simple:
+    la torsión tiene bronquio que "se corta" bruscamente, la atelectasia tiene bronquio visible hasta el colapso.
+    Lóbulo más frecuente en gatos: lóbulo medio derecho.
+  - NEUMOTÓRAX: gas libre (HU ~ -1000) en espacio pleural dorsal (en decúbito esternal), sin trama vascular.
+    Describe lateralidad (izquierdo/derecho/bilateral) y volumen estimado (leve/moderado/grave).
+    Distingue neumotórax de enfisema subcutáneo.
+  - BRONQUIOMALACIA: colapso dinámico de bronquios lobulares (especialmente lóbulo craneal izquierdo).
+  - ATELECTASIA VENTRAL: colapso/consolidación ventral, frecuente bajo anestesia general. No confundir con lesión primaria.
   - PATRÓN INTERSTICIAL difuso: puede ser artefacto de posición/anestesia.
+
+TIROIDES Y ENTRADA TORÁCICA — evalúa en los primeros cortes (zona craneal):
+  - Tiroides: dos lóbulos normalmente simétricos, <1cm, en posición paratraqueal craneal. En GATOS es frecuente
+    el adenoma/adenocarcinoma tiroideo: lóbulo aumentado (>1cm), con marcado realce heterogéneo post-contraste,
+    puede ser ectópico intratorácico. Reporta tamaño aproximado y simetría aunque no sea el motivo de consulta.
+  - Linfonodos mediastínicos craneales: en entrada torácica, paratraqueales/prevasculares.
 
 PARED TORÁCICA Y MEDIASTINO — evalúa en ventana TEJIDO BLANDO:
   - Musculatura torácica (dorsal ancho, intercostales, pectorales, serrato): compara simetría bilateral, busca masas, colecciones o alteraciones focales.
   - Tejido subcutáneo: masas encapsuladas o colecciones. Distingue grasa fisiológica distribuida (sin efecto masa) de una lesión organizada.
   - Mediastino craneal y caudal: colecciones fluidas (0-20 HU = quiste/fluido), masas, estructuras con contorno propio. No omitas estructuras pequeñas con morfología definida.
-  - Espacio pleural y pericárdico: confirma ausencia de derrame aunque sea mínimo.
+  - Espacio pleural: distingue trasudado (0-20 HU), exudado/hemotórax (20-40 HU), hemotórax puro (>40 HU).
+    Confirma ausencia de neumotórax (gas libre dorsal sin trama vascular).
+  - Espacio pericárdico: confirma ausencia de derrame aunque sea mínimo.
 
 ESTRUCTURAS ÓSEAS — evalúa en ventana TEJIDO BLANDO:
   - Costillas, esternebras y vértebras torácicas en el campo de estudio: lesiones osteolíticas, osteoproliferativas, irregularidades corticales o fracturas.
@@ -121,13 +135,18 @@ ESTRUCTURAS ÓSEAS — evalúa en ventana TEJIDO BLANDO:
 Analiza los cortes del TC torácico que se adjuntan y genera un informe diagnóstico detallado siguiendo esta estructura:
 
 1. DESCRIPCIÓN DE HALLAZGOS: Describe sistemáticamente lo que observas en cada uno de estos apartados:
-   - Parénquima pulmonar: nódulos, masas, patrón intersticial, consolidaciones, aireación por lóbulos
-   - Árbol traqueobronquial y vascularización pulmonar
-   - Mediastino: linfonodos (craneales y caudales por separado), colecciones fluidas, quistes, masas
-   - Pleura y cavidad pleural
-   - Estructuras cardiovasculares (corazón, grandes vasos, pericardio)
-   - Pared torácica: musculatura y tejido subcutáneo (simetría, masas, colecciones focales)
-   - Caja torácica ósea: costillas, esternebras, vértebras torácicas visibles
+   - Parénquima pulmonar: nódulos, masas, patrón intersticial, consolidaciones, aireación por lóbulos.
+     Evalúa CADA lóbulo individualmente (craneal derecho, medio derecho, caudal derecho, craneal izquierdo, caudal izquierdo).
+     Busca activamente patrón vesicular o interrupción bronquial que sugiera torsión lobar.
+   - Árbol traqueobronquial: permeabilidad, calibre, continuidad de cada bronquio lobar hasta su lóbulo destino.
+     Una interrupción abrupta del bronquio es signo de torsión lobar o masa endobronquial.
+   - Vascularización pulmonar: calibre de arterias y venas pulmonares, defectos de repleción.
+   - Espacio pleural y neumotórax: gas libre (neumotórax), líquido y su carácter HU, lateralidad.
+   - Mediastino: linfonodos (craneales y caudales por separado), colecciones fluidas, quistes, masas.
+   - Tiroides y estructuras de la entrada torácica: simetría y tamaño de lóbulos tiroideos, masas paratraqueales.
+   - Estructuras cardiovasculares (corazón, grandes vasos, pericardio, vena cava).
+   - Pared torácica: musculatura y tejido subcutáneo (simetría, masas, colecciones focales).
+   - Caja torácica ósea: costillas, esternebras, vértebras torácicas visibles.
 
 2. INTERPRETACIÓN: Interpreta los hallazgos en el contexto clínico del paciente.
 

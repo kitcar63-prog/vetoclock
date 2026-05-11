@@ -60,8 +60,8 @@ def _hu_array(ds: pydicom.Dataset) -> np.ndarray:
 
 
 def _hu_stats(arr: np.ndarray) -> dict:
-    # Exclude background air (< -500 HU) to measure actual tissue density
-    tissue = arr[arr > -500]
+    # Exclude only scanner background (< -900 HU), keep lung air (-900 to -300 HU)
+    tissue = arr[arr > -900]
     if tissue.size == 0:
         tissue = arr
     return {
@@ -79,20 +79,30 @@ def _hu_stats(arr: np.ndarray) -> dict:
 def _caracterizar_tejido(stats: dict) -> str:
     mean_hu = stats["mean"]
     p10     = stats["p10"]
+    p25     = stats["p25"]
 
-    # Si el percentil 10 cae en rango graso, hay una zona hipodensa significativa (posible lipoma)
+    # Pulmón bien aireado: media muy negativa
+    if mean_hu < -500:
+        return f"PULMÓN AIREADO ({mean_hu:.0f} HU) — parénquima con buena ventilación"
+    # Pulmón parcialmente aireado / consolidado
+    if -500 <= mean_hu < -300:
+        return f"PULMÓN PARCIALMENTE AIREADO ({mean_hu:.0f} HU) — posible consolidación o derrame"
+    # Neumotórax si p10 muy bajo
+    if p10 < -800:
+        return f"POSIBLE NEUMOTÓRAX (p10={p10:.0f} HU) — gas libre pleural a verificar en imagen"
+    # Lipoma: p10 en rango graso
     if HU_GRASA_MIN <= p10 <= HU_GRASA_MAX:
         return f"ZONA GRASA DETECTADA (p10={p10:.0f} HU, media={mean_hu:.0f} HU) — compatible con lipoma/tejido adiposo"
     elif HU_GRASA_MIN <= mean_hu <= HU_GRASA_MAX:
         return f"TEJIDO GRASO ({mean_hu:.0f} HU) — compatible con lipoma/tejido adiposo"
     elif HU_AGUA_MIN <= mean_hu <= HU_AGUA_MAX:
-        return f"DENSIDAD AGUA ({mean_hu:.0f} HU) — compatible con quiste/líquido"
+        return f"DENSIDAD AGUA/FLUIDO ({mean_hu:.0f} HU) — compatible con quiste, derrame o líquido libre"
     elif HU_TEJIDO_MIN <= mean_hu <= HU_TEJIDO_MAX:
         return f"TEJIDO BLANDO ({mean_hu:.0f} HU) — compatible con músculo/tejido blando"
     elif mean_hu > 100:
-        return f"DENSIDAD ALTA ({mean_hu:.0f} HU) — compatible con hueso/calcificación"
+        return f"DENSIDAD ALTA ({mean_hu:.0f} HU) — compatible con hueso/calcificación/contraste"
     else:
-        return f"DENSIDAD AIRE ({mean_hu:.0f} HU)"
+        return f"DENSIDAD INTERMEDIA ({mean_hu:.0f} HU)"
 
 
 def _add_orientation_markers(img: Image.Image) -> Image.Image:
@@ -119,15 +129,16 @@ def _dicom_to_pil(arr_hu: np.ndarray, window: str = "pulmon") -> Image.Image:
         arr = _apply_windowing(arr_hu, WINDOW_CENTER_PULMON, WINDOW_WIDTH_PULMON)
 
     img = Image.fromarray(arr).convert("RGB")
-    img = img.resize((256, 256), Image.LANCZOS)
+    img = img.resize((512, 512), Image.LANCZOS)
     return _add_orientation_markers(img)
 
 
 def _normalizar_caracterizaciones(stats_lista: list) -> list:
+    """Si >50% de cortes muestran ZONA GRASA, es panículo adiposo global, no lipoma focal."""
     if not stats_lista:
         return stats_lista
     n_grasa = sum(1 for s in stats_lista if "ZONA GRASA DETECTADA" in s.get("caracterizacion", ""))
-    if n_grasa / len(stats_lista) > 0.5:
+    if len(stats_lista) > 0 and n_grasa / len(stats_lista) > 0.5:
         for s in stats_lista:
             if "ZONA GRASA DETECTADA" in s.get("caracterizacion", ""):
                 s["caracterizacion"] = (
@@ -260,10 +271,19 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
             desc = getattr(slices[0][1], "SeriesDescription", "sin descripción")
             print(f"[DICOM]   UID={uid} | {len(slices)} slices | desc='{desc}'")
 
-        # Usar la serie con más slices
-        serie_principal_meta = max(series_meta.values(), key=len)
-        desc_principal = getattr(serie_principal_meta[0][1], "SeriesDescription", "sin descripción")
-        print(f"[DICOM] Serie seleccionada: {len(serie_principal_meta)} slices | '{desc_principal}'")
+        # Seleccionar la serie con cortes más finos (mayor resolución diagnóstica)
+        # Excluir scouts/localizadores (< 10 slices); entre candidatas, priorizar menor SliceThickness
+        def _serie_score(slices):
+            if len(slices) < 10:
+                return (99, 0)   # penalizar scouts
+            ds = slices[0][1]
+            thickness = float(getattr(ds, "SliceThickness", 99))
+            return (thickness, -len(slices))  # menor thickness primero, más slices en empate
+
+        serie_principal_meta = min(series_meta.values(), key=_serie_score)
+        desc_principal  = getattr(serie_principal_meta[0][1], "SeriesDescription", "sin descripción")
+        thickness_print = float(getattr(serie_principal_meta[0][1], "SliceThickness", "?"))
+        print(f"[DICOM] Serie seleccionada: {len(serie_principal_meta)} slices | {thickness_print}mm | '{desc_principal}'")
 
         pesos       = _pesos_por_motivo(presentacion, antecedentes)
         counts_zona = _calcular_counts(n_cortes, pesos)
