@@ -348,14 +348,22 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
         # Paso 2: cargar pixels solo de los cortes seleccionados
         print(f"[DICOM] Cargando pixels de {len(nombres_seleccionados)} cortes seleccionados...")
         seleccionados = []
+        errores_pixel = {}
         for nombre in nombres_seleccionados:
             try:
                 with zf.open(nombre) as f:
                     ds = pydicom.dcmread(io.BytesIO(f.read()), force=True)
-                    if hasattr(ds, "pixel_array"):
-                        seleccionados.append(ds)
-            except Exception:
-                continue
+                try:
+                    _ = ds.pixel_array  # verificar que se puede decodificar
+                    seleccionados.append(ds)
+                except Exception as e_px:
+                    clave = type(e_px).__name__
+                    errores_pixel[clave] = str(e_px)
+            except Exception as e_read:
+                errores_pixel[type(e_read).__name__] = str(e_read)
+        if errores_pixel:
+            for tipo, msg in errores_pixel.items():
+                print(f"[DICOM] ✗ Error decodificando pixels — {tipo}: {msg}")
         print(f"[DICOM] {len(seleccionados)} cortes con pixels cargados")
 
         # Construir series_info desde metadatos
