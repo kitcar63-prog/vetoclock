@@ -63,7 +63,7 @@ if st.button("Analizar caso", type="primary"):
                 st.write("📦 Comprobando caché local...")
                 resultado_dicom = dicom_processor.descargar_y_procesar(
                     caso["enlacedicom"],
-                    n_cortes=25,
+                    n_cortes=20,
                     presentacion=caso.get("presentacion", ""),
                     antecedentes=caso.get("antecedentes", ""),
                 )

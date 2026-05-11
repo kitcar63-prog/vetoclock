@@ -120,7 +120,10 @@ def _add_orientation_markers(img: Image.Image) -> Image.Image:
     return img
 
 
-def _dicom_to_pil(arr_hu: np.ndarray, window: str = "pulmon") -> Image.Image:
+IMG_SIZE = 400   # px — balance calidad/memoria (10-15× menos RAM que PIL sin comprimir)
+
+
+def _dicom_to_jpeg(arr_hu: np.ndarray, window: str = "pulmon") -> bytes:
     if window == "mediastino":
         arr = _apply_windowing(arr_hu, WINDOW_CENTER_MEDIASTINO, WINDOW_WIDTH_MEDIASTINO)
     elif window == "grasa":
@@ -129,8 +132,11 @@ def _dicom_to_pil(arr_hu: np.ndarray, window: str = "pulmon") -> Image.Image:
         arr = _apply_windowing(arr_hu, WINDOW_CENTER_PULMON, WINDOW_WIDTH_PULMON)
 
     img = Image.fromarray(arr).convert("RGB")
-    img = img.resize((512, 512), Image.LANCZOS)
-    return _add_orientation_markers(img)
+    img = img.resize((IMG_SIZE, IMG_SIZE), Image.LANCZOS)
+    img = _add_orientation_markers(img)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
 
 
 def _normalizar_caracterizaciones(stats_lista: list) -> list:
@@ -265,6 +271,7 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
         for nombre, ds in meta_list:
             uid = getattr(ds, "SeriesInstanceUID", "sin_uid")
             series_meta.setdefault(uid, []).append((nombre, ds))
+        del meta_list  # liberar memoria: metadatos ya indexados en series_meta
 
         print(f"[DICOM] {len(series_meta)} series detectadas:")
         for uid, slices in series_meta.items():
@@ -315,8 +322,10 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
                         arr_hu = arr * slope + intercept
                         fraccion = float(np.mean(arr_hu < -300))
                         fracciones_pulmon.append((idx, fraccion))
+                        del arr, arr_hu  # liberar pixels de muestreo
                     else:
                         fracciones_pulmon.append((idx, 0.0))
+                    del ds
             except Exception:
                 fracciones_pulmon.append((idx, 0.0))
 
@@ -345,64 +354,60 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
             indices = np.linspace(start, end - 1, count, dtype=int)
             nombres_seleccionados.extend([serie_ordenada[idx][0] for idx in indices])
 
-        # Paso 2: cargar pixels solo de los cortes seleccionados
-        print(f"[DICOM] Cargando pixels de {len(nombres_seleccionados)} cortes seleccionados...")
-        seleccionados = []
-        errores_pixel = {}
-        for nombre in nombres_seleccionados:
+        # Construir series_info desde metadatos antes de liberar series_meta
+        series_info_local = [
+            {"uid": uid, "n_slices": len(slices), "desc": getattr(slices[0][1], "SeriesDescription", "sin descripción")}
+            for uid, slices in series_meta.items()
+        ]
+        del series_meta  # liberar todos los Dataset de metadatos
+
+        # Paso 2: cargar pixels, procesar y convertir a JPEG bytes inmediatamente
+        print(f"[DICOM] Procesando {len(nombres_seleccionados)} cortes seleccionados...")
+        hu_stats_lista   = []
+        imagenes_pulmon  = []
+        imagenes_tejido  = []
+        imagenes_grasa   = []
+        errores_pixel    = {}
+
+        for i, nombre in enumerate(nombres_seleccionados):
             try:
                 with zf.open(nombre) as f:
                     ds = pydicom.dcmread(io.BytesIO(f.read()), force=True)
                 try:
-                    _ = ds.pixel_array  # verificar que se puede decodificar
-                    seleccionados.append(ds)
+                    arr_hu = _hu_array(ds)
+                    del ds  # liberar Dataset inmediatamente tras extraer HU array
+                    stats  = _hu_stats(arr_hu)
+                    stats["caracterizacion"] = _caracterizar_tejido(stats)
+                    hu_stats_lista.append(stats)
+
+                    # Convertir a JPEG bytes en lugar de PIL Images (~50KB vs ~470KB por imagen)
+                    imagenes_pulmon.append(_dicom_to_jpeg(arr_hu, "pulmon"))
+                    imagenes_tejido.append(_dicom_to_jpeg(arr_hu, "mediastino"))
+                    imagenes_grasa.append(_dicom_to_jpeg(arr_hu, "grasa"))
+                    del arr_hu  # liberar array numpy tras generar los 3 JPEGs
+                    print(f"[DICOM] Corte {i+1}/{len(nombres_seleccionados)}: media={stats['mean']} HU | {stats['caracterizacion']}")
                 except Exception as e_px:
                     clave = type(e_px).__name__
                     errores_pixel[clave] = str(e_px)
+                    try:
+                        del ds
+                    except Exception:
+                        pass
             except Exception as e_read:
                 errores_pixel[type(e_read).__name__] = str(e_read)
+
         if errores_pixel:
             for tipo, msg in errores_pixel.items():
                 print(f"[DICOM] ✗ Error decodificando pixels — {tipo}: {msg}")
-        print(f"[DICOM] {len(seleccionados)} cortes con pixels cargados")
-
-        # Construir series_info desde metadatos
-        series = {uid: [ds for _, ds in slices] for uid, slices in series_meta.items()}
-
-        hu_stats_lista = []
-        imagenes_pulmon      = []
-        imagenes_tejido      = []
-        imagenes_grasa       = []
-
-        for i, ds in enumerate(seleccionados):
-            try:
-                print(f"[DICOM] Procesando corte {i + 1}/{len(seleccionados)}...")
-                arr_hu = _hu_array(ds)
-                stats  = _hu_stats(arr_hu)
-                stats["caracterizacion"] = _caracterizar_tejido(stats)
-                hu_stats_lista.append(stats)
-
-                imagenes_pulmon.append(_dicom_to_pil(arr_hu, "pulmon"))
-                imagenes_tejido.append(_dicom_to_pil(arr_hu, "mediastino"))
-                imagenes_grasa.append(_dicom_to_pil(arr_hu, "grasa"))
-                print(f"[DICOM]   → media={stats['mean']} HU | p10={stats['p10']} HU | {stats['caracterizacion']}")
-            except Exception as e:
-                print(f"[DICOM]   ✗ Error en corte {i + 1}: {e}")
-                continue
 
         hu_stats_lista = _normalizar_caracterizaciones(hu_stats_lista)
         print(f"[DICOM] Procesamiento completado: {len(imagenes_pulmon)} cortes OK")
-
-    series_info = [
-        {"uid": uid, "n_slices": len(sl), "desc": getattr(sl[0], "SeriesDescription", "sin descripción")}
-        for uid, sl in series.items()
-    ]
 
     return {
         "pulmon":        imagenes_pulmon,
         "tejido_blando": imagenes_tejido,
         "grasa":         imagenes_grasa,
-        "series_info":   series_info,
+        "series_info":   series_info_local,
         "hu_stats":      hu_stats_lista,
         "n_cortes":      len(imagenes_pulmon),
         "counts_zona":   counts_zona,

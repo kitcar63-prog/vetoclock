@@ -11,7 +11,9 @@ def _get_client():
     return anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
 
-def _imagen_a_base64(img: Image.Image) -> str:
+def _imagen_a_base64(img) -> str:
+    if isinstance(img, (bytes, bytearray)):
+        return base64.standard_b64encode(img).decode("utf-8")
     buffer = io.BytesIO()
     img.save(buffer, format="JPEG", quality=85)
     return base64.standard_b64encode(buffer.getvalue()).decode("utf-8")
