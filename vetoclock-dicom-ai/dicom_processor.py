@@ -278,10 +278,45 @@ def descargar_y_procesar(enlace_dicom: str, n_cortes: int = 20, presentacion: st
 
         serie_ordenada = sorted(serie_principal_meta, key=z_pos_meta)
         total = len(serie_ordenada)
+
+        # Detectar zona torácica: muestrear ~20 slices para encontrar dónde hay pulmón
+        n_muestras = min(20, total)
+        indices_muestra = np.linspace(0, total - 1, n_muestras, dtype=int)
+        fracciones_pulmon = []
+        for idx in indices_muestra:
+            nombre = serie_ordenada[idx][0]
+            try:
+                with zf.open(nombre) as f:
+                    ds = pydicom.dcmread(io.BytesIO(f.read()), force=True)
+                    if hasattr(ds, "pixel_array"):
+                        arr = ds.pixel_array.astype(np.float32)
+                        slope = float(getattr(ds, "RescaleSlope", 1))
+                        intercept = float(getattr(ds, "RescaleIntercept", 0))
+                        arr_hu = arr * slope + intercept
+                        fraccion = float(np.mean(arr_hu < -300))
+                        fracciones_pulmon.append((idx, fraccion))
+                    else:
+                        fracciones_pulmon.append((idx, 0.0))
+            except Exception:
+                fracciones_pulmon.append((idx, 0.0))
+
+        con_pulmon = [(idx, f) for idx, f in fracciones_pulmon if f >= 0.05]
+        if con_pulmon:
+            idx_torax_ini = con_pulmon[0][0]
+            idx_torax_fin = con_pulmon[-1][0]
+            margen = max(5, (idx_torax_fin - idx_torax_ini) // 10)
+            idx_torax_ini = max(0, idx_torax_ini - margen)
+            idx_torax_fin = min(total - 1, idx_torax_fin + margen)
+            print(f"[DICOM] Zona torácica detectada: slices {idx_torax_ini}–{idx_torax_fin} de {total}")
+        else:
+            idx_torax_ini, idx_torax_fin = 0, total - 1
+            print(f"[DICOM] No se detectó zona torácica clara, usando rango completo")
+
+        rango = idx_torax_fin - idx_torax_ini + 1
         zones = [
-            (int(total * 0.10), int(total * 0.35)),
-            (int(total * 0.35), int(total * 0.65)),
-            (int(total * 0.65), int(total * 0.90)),
+            (idx_torax_ini + int(rango * 0.10), idx_torax_ini + int(rango * 0.35)),
+            (idx_torax_ini + int(rango * 0.35), idx_torax_ini + int(rango * 0.65)),
+            (idx_torax_ini + int(rango * 0.65), idx_torax_ini + int(rango * 0.90)),
         ]
         counts = _calcular_counts(n_cortes, pesos)
         nombres_seleccionados = []
